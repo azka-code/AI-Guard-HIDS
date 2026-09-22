@@ -1,7 +1,10 @@
 import sqlite3
+import os
 from datetime import datetime
 
 DATABASE = "data/alerts.db"
+
+os.makedirs("data", exist_ok=True)
 
 
 def init_database():
