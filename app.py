@@ -1,18 +1,48 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import os
 
+from dotenv import load_dotenv
+from groq import Groq
 from ai_engine import analyze_security_event
+
+load_dotenv()
 
 DATABASE = "data/alerts.db"
 
+os.makedirs("data", exist_ok=True)
 
-st.set_page_config(
-    page_title="AI Guard HIDS",
-    page_icon="🛡️",
-    layout="wide"
-)
 
+# --------------------------------
+# DATABASE INITIALIZATION
+# --------------------------------
+
+def initialize_database():
+    connection = sqlite3.connect(DATABASE)
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            event_type TEXT,
+            source TEXT,
+            severity TEXT,
+            log_message TEXT,
+            status TEXT
+        )
+    """)
+
+    connection.commit()
+    connection.close()
+
+
+initialize_database()
+
+
+# --------------------------------
+# GET ALERTS
+# --------------------------------
 
 def get_alerts():
     connection = sqlite3.connect(DATABASE)
@@ -35,6 +65,36 @@ def get_alerts():
     connection.close()
 
     return dataframe
+
+
+# --------------------------------
+# GROQ CLIENT
+# --------------------------------
+
+def get_groq_client():
+    groq_api_key = os.getenv("GROQ_API_KEY")
+
+    if not groq_api_key:
+        try:
+            groq_api_key = st.secrets["GROQ_API_KEY"]
+        except Exception:
+            groq_api_key = None
+
+    if not groq_api_key:
+        raise ValueError("GROQ_API_KEY is not configured.")
+
+    return Groq(api_key=groq_api_key)
+
+
+# --------------------------------
+# PAGE CONFIGURATION
+# --------------------------------
+
+st.set_page_config(
+    page_title="AI Guard HIDS",
+    page_icon="🛡️",
+    layout="wide"
+)
 
 
 # --------------------------------
@@ -211,6 +271,7 @@ else:
         "No security events available for AI analysis."
     )
 
+
 # --------------------------------
 # SECURITY CHATBOT
 # --------------------------------
@@ -233,7 +294,9 @@ if st.button("Ask AI"):
 
         if recent_events.empty:
 
-            st.info("No security events are currently stored.")
+            st.info(
+                "No security events are currently stored."
+            )
 
         else:
 
@@ -255,21 +318,14 @@ User Question:
 
 Provide a clear cybersecurity-focused answer.
 Mention relevant event types, severity and source where useful.
+
 If the available logs do not contain enough information,
 clearly say that the information is not available.
 """
 
             try:
 
-                from groq import Groq
-                import os
-                from dotenv import load_dotenv
-
-                load_dotenv()
-
-                client = Groq(
-                    api_key=os.getenv("GROQ_API_KEY")
-                )
+                client = get_groq_client()
 
                 response = client.chat.completions.create(
                     model="openai/gpt-oss-20b",
@@ -301,6 +357,8 @@ clearly say that the information is not available.
     else:
 
         st.warning("Please enter a question.")
+
+
 # --------------------------------
 # REFRESH
 # --------------------------------
